@@ -105,7 +105,7 @@ const TradesTable = () => {
       return 0;
     });
     return result;
-  }, [search, certFilter, statusFilter, sortKey, sortDir]);
+  }, [search, entityFilter, certFilter, statusFilter, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
