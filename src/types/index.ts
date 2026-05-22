@@ -12,7 +12,7 @@ export interface Entity {
 }
 
 export type CertType = 'GoO' | 'I-REC' | 'REC';
-export type TradeStatus = 'Paid' | 'Payable' | 'Contracted';
+export type TradeStatus = 'Delivered' | 'Not Delivered';
 export type CertFilter = 'All' | CertType;
 export type TimePeriod = 'All time' | '2026YTD' | '2025' | '2024';
 
@@ -26,6 +26,7 @@ export interface Trade {
   id: string;
   entity: string;
   certType: CertType;
+  technology: string[];
   volume: number;
   price: number;
   tradeDate: string;

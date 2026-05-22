@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -6,6 +7,7 @@ import { Link } from 'react-router-dom';
 import type { Entity, MonthlyPoint } from '../../types';
 import { formatNumber } from '../../utils/format';
 import { entityChartData } from '../../data/mockData';
+import RFQModal from './RFQModal';
 
 interface EntitySectionProps {
   entity: Entity;
@@ -100,12 +102,47 @@ const EntitySection = ({ entity }: EntitySectionProps) => {
   const base  = `/trades?entity=${encodeURIComponent(entity.name)}`;
   const id    = toId(entity.name);
   const data: MonthlyPoint[] = entityChartData[entity.name] ?? [];
+  const [rfqOpen, setRfqOpen] = useState(false);
 
   return (
     <div style={{ marginBottom: 28 }}>
-      <h2 style={{ fontSize: 16, fontWeight: 600, color: '#3c4950', marginBottom: 12 }}>
-        {entity.name}
-      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#3c4950', margin: 0 }}>
+          {entity.name}
+        </h2>
+        <button
+          onClick={() => setRfqOpen(true)}
+          style={{
+            padding: '6px 14px',
+            borderRadius: 7,
+            border: '1px solid #dde3ea',
+            background: '#fff',
+            color: '#3c4950',
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'border-color 0.15s ease, background 0.15s ease',
+            whiteSpace: 'nowrap',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#1571f1';
+            (e.currentTarget as HTMLButtonElement).style.background = '#f5f8ff';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#dde3ea';
+            (e.currentTarget as HTMLButtonElement).style.background = '#fff';
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M6.5 1v11M1 6.5h11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
+          Create RFQ
+        </button>
+      </div>
+      {rfqOpen && <RFQModal entityName={entity.name} onClose={() => setRfqOpen(false)} />}
 
       <div style={{
         display: 'flex',
@@ -126,9 +163,9 @@ const EntitySection = ({ entity }: EntitySectionProps) => {
           width: 200,
           flexShrink: 0,
         }}>
-          <MetricCard label="CONTRACTED" value={entity.contracted.value} unit={entity.contracted.unit} to={`${base}&status=Contracted`} />
-          <MetricCard label="PAID"       value={entity.paid.value}       unit={entity.paid.unit}       to={`${base}&status=Paid`} />
-          <MetricCard label="PAYABLE"    value={entity.payable.value}    unit={entity.payable.unit}    to={`${base}&status=Payable`} />
+          <MetricCard label="CONTRACTED" value={entity.contracted.value} unit={entity.contracted.unit} to={base} />
+          <MetricCard label="PAID"       value={entity.paid.value}       unit={entity.paid.unit}       to={`${base}&status=Delivered`} />
+          <MetricCard label="PAYABLE"    value={entity.payable.value}    unit={entity.payable.unit}    to={`${base}&status=Not+Delivered`} />
         </div>
 
         {/* ── Divider ── */}

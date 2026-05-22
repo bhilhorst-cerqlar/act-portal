@@ -1,450 +1,278 @@
 import type { Entity, Trade, MonthlyPoint } from '../types';
 
+// ── Entities (top 5 Siemens entities by contracted MWh) ──────────────────────
+// Source: prd_export_act_only.json — ACT SELL trades → customer BUY perspective
+// contracted = total obligation MWh
+// paid       = total € value of DELIVERED obligations
+// payable    = total € value of NOT_DELIVERED obligations
+
 export const entities: Entity[] = [
   {
-    name: 'Siemens Mobility GmbH',
-    target: { value: 252000, unit: 'MWh' },
-    contracted: { value: 198625, unit: 'MWh' },
-    paid: { value: 347209, unit: '€' },
-    payable: { value: 112891, unit: '€' },
+    name: 'Siemens Energy Global GmbH & Co. KG',
+    target:     { value: 291326, unit: 'MWh' },
+    contracted: { value: 291326, unit: 'MWh' },
+    paid:       { value: 554257, unit: '€' },
+    payable:    { value: 543400, unit: '€' },
   },
   {
-    name: 'Siemens AB',
-    target: { value: 150000, unit: 'MWh' },
-    contracted: { value: 66005, unit: 'MWh' },
-    paid: { value: 123200, unit: '€' },
-    payable: { value: 66111, unit: '€' },
+    name: 'Siemens Aktiengesellschaft',
+    target:     { value: 11795, unit: 'MWh' },
+    contracted: { value: 11795, unit: 'MWh' },
+    paid:       { value: 20641, unit: '€' },
+    payable:    { value: 0,     unit: '€' },
+  },
+  {
+    name: 'Siemens Healthcare Diagnostics',
+    target:     { value: 9140, unit: 'MWh' },
+    contracted: { value: 9140, unit: 'MWh' },
+    paid:       { value: 15995, unit: '€' },
+    payable:    { value: 0,    unit: '€' },
   },
   {
     name: 'Siemens Zrt.',
-    target: { value: 252000, unit: 'MWh' },
-    contracted: { value: 198625, unit: 'MWh' },
-    paid: { value: 347209, unit: '€' },
-    payable: { value: 112891, unit: '€' },
+    target:     { value: 7952, unit: 'MWh' },
+    contracted: { value: 7952, unit: 'MWh' },
+    paid:       { value: 12922, unit: '€' },
+    payable:    { value: 0,    unit: '€' },
   },
   {
-    name: 'Siemens Schweiz AG',
-    target: { value: 150000, unit: 'MWh' },
-    contracted: { value: 66005, unit: 'MWh' },
-    paid: { value: 123200, unit: '€' },
-    payable: { value: 66111, unit: '€' },
-  },
-  {
-    name: 'Siemens Energy GmbH',
-    target: { value: 310000, unit: 'MWh' },
-    contracted: { value: 280000, unit: 'MWh' },
-    paid: { value: 415000, unit: '€' },
-    payable: { value: 98000, unit: '€' },
+    name: 'Siemens Healthineers AG',
+    target:     { value: 4962, unit: 'MWh' },
+    contracted: { value: 4962, unit: 'MWh' },
+    paid:       { value: 8684, unit: '€' },
+    payable:    { value: 0,   unit: '€' },
   },
 ];
 
-// ── Monthly time-series data per entity ──────────────────────────────────────
-// 24 months: Jan 2024 → Dec 2025
-// mwh = cumulative MWh contracted that month
-// eur = cumulative € paid/payable that month
+// ── Monthly chart data (Jan 2024 – Dec 2026, 36 months) ──────────────────────
+// Volume and value are spread evenly across each trade's production period.
 
-const months = [
-  'Jan 24','Feb 24','Mar 24','Apr 24','May 24','Jun 24',
-  'Jul 24','Aug 24','Sep 24','Oct 24','Nov 24','Dec 24',
-  'Jan 25','Feb 25','Mar 25','Apr 25','May 25','Jun 25',
-  'Jul 25','Aug 25','Sep 25','Oct 25','Nov 25','Dec 25',
-];
+type MonthMap = Record<string, { mwh: number; eur: number }>;
 
-// Generates a realistic-looking wavy series that sums roughly to `total`
-const wavySeries = (total: number, seed: number): number[] => {
-  const n = 24;
-  const base = total / n;
-  return months.map((_, i) => {
-    const wave =
-      Math.sin((i + seed) * 0.7) * 0.35 +
-      Math.sin((i + seed) * 1.3) * 0.2 +
-      Math.cos((i + seed) * 0.4) * 0.15;
-    return Math.round(Math.max(base * 0.2, base * (1 + wave)));
+function buildMonthMap(): MonthMap {
+  const map: MonthMap = {};
+  for (let y = 2024; y <= 2026; y++)
+    for (let m = 1; m <= 12; m++)
+      map[`${y}-${String(m).padStart(2, '0')}`] = { mwh: 0, eur: 0 };
+  return map;
+}
+
+function addToMap(map: MonthMap, from: string, to: string, mwh: number, eur: number) {
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  const months: [number, number][] = [];
+  let y = fy, m = fm;
+  while (y < ty || (y === ty && m <= tm)) {
+    months.push([y, m]);
+    if (++m > 12) { m = 1; y++; }
+  }
+  const valid = months.filter(([yr]) => yr >= 2024 && yr <= 2026);
+  if (!valid.length) return;
+  const mwhPM = mwh / months.length; // spread over full production period
+  const eurPM = eur / months.length;
+  for (const [yr, mo] of valid) {
+    const key = `${yr}-${String(mo).padStart(2, '0')}`;
+    if (map[key]) { map[key].mwh += mwhPM; map[key].eur += eurPM; }
+  }
+}
+
+const MONTH_LABELS: Record<string, string> = {
+  '01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun',
+  '07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec',
+};
+function mapToSeries(map: MonthMap): MonthlyPoint[] {
+  return Object.entries(map).map(([key, v]) => {
+    const [y, mo] = key.split('-');
+    return {
+      month: `${MONTH_LABELS[mo]} ${y.slice(2)}`,
+      mwh:   Math.round(v.mwh),
+      eur:   Math.round(v.eur),
+    };
   });
-};
+}
 
-const buildSeries = (
-  entityIdx: number,
-  mwhTotal: number,
-  eurTotal: number,
-): MonthlyPoint[] => {
-  const mwhSeries = wavySeries(mwhTotal, entityIdx * 3);
-  const eurSeries = wavySeries(eurTotal, entityIdx * 3 + 5);
-  return months.map((month, i) => ({ month, mwh: mwhSeries[i], eur: eurSeries[i] }));
-};
+// Siemens Energy Global GmbH & Co. KG
+const energyMap = buildMonthMap();
+addToMap(energyMap, '2024-01', '2024-12',   3486,  12027);  // IBDF4Q – DELIVERED
+addToMap(energyMap, '2024-01', '2024-12',   1840,   5980);  // VSCS2S – DELIVERED
+addToMap(energyMap, '2025-01', '2025-12', 143000, 536250);  // QJ6CI7 – DELIVERED
+addToMap(energyMap, '2026-01', '2026-12', 143000, 543400);  // 65AWEJ – NOT DELIVERED
+
+// Siemens Aktiengesellschaft
+const aktMap = buildMonthMap();
+addToMap(aktMap, '2024-09', '2025-12', 11795, 20641);       // 11IULF – DELIVERED
+
+// Siemens Healthcare Diagnostics
+const hcMap = buildMonthMap();
+addToMap(hcMap, '2024-10', '2025-12',  9140, 15995);        // N9SU8Y – DELIVERED
+
+// Siemens Zrt.
+const zrtMap = buildMonthMap();
+addToMap(zrtMap, '2025-08', '2025-12', 3426,  5996);        // 2W77QX – DELIVERED
+addToMap(zrtMap, '2025-07', '2025-07', 2538,  4442);        // 3LEVDA – DELIVERED
+addToMap(zrtMap, '2025-06', '2025-06', 1801,  2251);        // 6I858M – DELIVERED
+addToMap(zrtMap, '2025-07', '2025-07',  187,   234);        // MCJUMO – DELIVERED
+
+// Siemens Healthineers AG
+const heiMap = buildMonthMap();
+addToMap(heiMap, '2024-09', '2025-12', 4962, 8684);         // KD3GDU – DELIVERED
 
 export const entityChartData: Record<string, MonthlyPoint[]> = {
-  'Siemens Mobility GmbH':  buildSeries(0, 198625, 347209 + 112891),
-  'Siemens AB':             buildSeries(1, 66005,  123200 + 66111),
-  'Siemens Zrt.':           buildSeries(2, 198625, 347209 + 112891),
-  'Siemens Schweiz AG':     buildSeries(3, 66005,  123200 + 66111),
-  'Siemens Energy GmbH':    buildSeries(4, 280000, 415000 + 98000),
+  'Siemens Energy Global GmbH & Co. KG': mapToSeries(energyMap),
+  'Siemens Aktiengesellschaft':           mapToSeries(aktMap),
+  'Siemens Healthcare Diagnostics':       mapToSeries(hcMap),
+  'Siemens Zrt.':                         mapToSeries(zrtMap),
+  'Siemens Healthineers AG':              mapToSeries(heiMap),
 };
+
+// ── Trades ────────────────────────────────────────────────────────────────────
+// All trades are BUY from Siemens' perspective (ACT side = SELL).
+// deliveryPeriod = obligation production range (formatted from obligation_production_from/to)
+// status         = delivery_state mapped to 'Delivered' | 'Not Delivered'
+// country        = go_issuing_country (single) or 'EU Mix' (multi-country)
 
 export const trades: Trade[] = [
   {
-    id: 'TRD-2025-00842',
-    entity: 'Siemens Mobility GmbH',
+    id: 'QJ6CI7',
+    entity: 'Siemens Energy Global GmbH & Co. KG',
     certType: 'GoO',
-    volume: 12500,
-    price: 1.42,
-    tradeDate: '2025-03-15',
+    technology: ['T01', 'T02'],
+    volume: 143000,
+    price: 3.75,
+    tradeDate: '2024-01-31',
     deliveryPeriod: 'Jan 2025 – Dec 2025',
-    status: 'Paid',
-    country: 'Germany',
-    countryFlag: '🇩🇪',
+    status: 'Delivered',
+    country: 'EU Mix',
+    countryFlag: '🇪🇺',
   },
   {
-    id: 'TRD-2025-00791',
-    entity: 'Siemens AB',
-    certType: 'I-REC',
-    volume: 8200,
-    price: 0.98,
-    tradeDate: '2025-02-20',
-    deliveryPeriod: 'Jan 2025 – Jun 2025',
-    status: 'Payable',
-    country: 'Sweden',
-    countryFlag: '🇸🇪',
+    id: '65AWEJ',
+    entity: 'Siemens Energy Global GmbH & Co. KG',
+    certType: 'GoO',
+    technology: ['T01', 'T02'],
+    volume: 143000,
+    price: 3.80,
+    tradeDate: '2024-02-01',
+    deliveryPeriod: 'Jan 2026 – Dec 2026',
+    status: 'Not Delivered',
+    country: 'EU Mix',
+    countryFlag: '🇪🇺',
   },
   {
-    id: 'TRD-2025-00756',
+    id: 'IBDF4Q',
+    entity: 'Siemens Energy Global GmbH & Co. KG',
+    certType: 'GoO',
+    technology: ['T01', 'T02'],
+    volume: 3486,
+    price: 3.45,
+    tradeDate: '2025-10-24',
+    deliveryPeriod: 'Jan 2024 – Dec 2024',
+    status: 'Delivered',
+    country: 'EU Mix',
+    countryFlag: '🇪🇺',
+  },
+  {
+    id: 'VSCS2S',
+    entity: 'Siemens Energy Global GmbH & Co. KG',
+    certType: 'GoO',
+    technology: ['T01', 'T02'],
+    volume: 1840,
+    price: 3.25,
+    tradeDate: '2025-10-24',
+    deliveryPeriod: 'Jan 2024 – Dec 2024',
+    status: 'Delivered',
+    country: 'EU Mix',
+    countryFlag: '🇪🇺',
+  },
+  {
+    id: '11IULF',
+    entity: 'Siemens Aktiengesellschaft',
+    certType: 'GoO',
+    technology: ['T01', 'T02'],
+    volume: 11795,
+    price: 1.75,
+    tradeDate: '2025-09-11',
+    deliveryPeriod: 'Sep 2024 – Dec 2025',
+    status: 'Delivered',
+    country: 'EU Mix',
+    countryFlag: '🇪🇺',
+  },
+  {
+    id: 'N9SU8Y',
+    entity: 'Siemens Healthcare Diagnostics',
+    certType: 'GoO',
+    technology: ['T01', 'T02'],
+    volume: 9140,
+    price: 1.75,
+    tradeDate: '2025-10-02',
+    deliveryPeriod: 'Oct 2024 – Dec 2025',
+    status: 'Delivered',
+    country: 'EU Mix',
+    countryFlag: '🇪🇺',
+  },
+  {
+    id: 'KD3GDU',
+    entity: 'Siemens Healthineers AG',
+    certType: 'GoO',
+    technology: ['T01', 'T02'],
+    volume: 4962,
+    price: 1.75,
+    tradeDate: '2025-09-11',
+    deliveryPeriod: 'Sep 2024 – Dec 2025',
+    status: 'Delivered',
+    country: 'EU Mix',
+    countryFlag: '🇪🇺',
+  },
+  {
+    id: '2W77QX',
     entity: 'Siemens Zrt.',
     certType: 'GoO',
-    volume: 22000,
-    price: 1.55,
-    tradeDate: '2025-01-10',
-    deliveryPeriod: 'Jan 2025 – Dec 2025',
-    status: 'Contracted',
+    technology: ['T01', 'T02'],
+    volume: 3426,
+    price: 1.75,
+    tradeDate: '2026-02-18',
+    deliveryPeriod: 'Aug 2025 – Dec 2025',
+    status: 'Delivered',
     country: 'Hungary',
     countryFlag: '🇭🇺',
   },
   {
-    id: 'TRD-2025-00698',
-    entity: 'Siemens Schweiz AG',
-    certType: 'REC',
-    volume: 5000,
-    price: 2.10,
-    tradeDate: '2025-01-05',
-    deliveryPeriod: 'Jan 2025 – Jun 2025',
-    status: 'Paid',
-    country: 'Switzerland',
-    countryFlag: '🇨🇭',
-  },
-  {
-    id: 'TRD-2025-00651',
-    entity: 'Siemens Energy GmbH',
-    certType: 'GoO',
-    volume: 35000,
-    price: 1.38,
-    tradeDate: '2024-12-20',
-    deliveryPeriod: 'Jan 2025 – Dec 2025',
-    status: 'Payable',
-    country: 'Germany',
-    countryFlag: '🇩🇪',
-  },
-  {
-    id: 'TRD-2024-00589',
-    entity: 'Siemens Mobility GmbH',
-    certType: 'I-REC',
-    volume: 9800,
-    price: 0.85,
-    tradeDate: '2024-11-14',
-    deliveryPeriod: 'Jul 2024 – Dec 2024',
-    status: 'Paid',
-    country: 'India',
-    countryFlag: '🇮🇳',
-  },
-  {
-    id: 'TRD-2024-00521',
-    entity: 'Siemens AB',
-    certType: 'GoO',
-    volume: 14200,
-    price: 1.62,
-    tradeDate: '2024-10-03',
-    deliveryPeriod: 'Jan 2024 – Dec 2024',
-    status: 'Paid',
-    country: 'Norway',
-    countryFlag: '🇳🇴',
-  },
-  {
-    id: 'TRD-2024-00478',
-    entity: 'Siemens Zrt.',
-    certType: 'REC',
-    volume: 6500,
-    price: 1.95,
-    tradeDate: '2024-09-12',
-    deliveryPeriod: 'Jul 2024 – Dec 2024',
-    status: 'Paid',
-    country: 'Austria',
-    countryFlag: '🇦🇹',
-  },
-  {
-    id: 'TRD-2024-00412',
-    entity: 'Siemens Schweiz AG',
-    certType: 'I-REC',
-    volume: 11000,
-    price: 1.05,
-    tradeDate: '2024-08-22',
-    deliveryPeriod: 'Jul 2024 – Dec 2024',
-    status: 'Payable',
-    country: 'Brazil',
-    countryFlag: '🇧🇷',
-  },
-  {
-    id: 'TRD-2024-00367',
-    entity: 'Siemens Energy GmbH',
-    certType: 'GoO',
-    volume: 28000,
-    price: 1.45,
-    tradeDate: '2024-07-18',
-    deliveryPeriod: 'Jan 2024 – Dec 2024',
-    status: 'Paid',
-    country: 'Spain',
-    countryFlag: '🇪🇸',
-  },
-  {
-    id: 'TRD-2024-00301',
-    entity: 'Siemens Mobility GmbH',
-    certType: 'GoO',
-    volume: 18500,
-    price: 1.58,
-    tradeDate: '2024-06-05',
-    deliveryPeriod: 'Jan 2024 – Jun 2024',
-    status: 'Paid',
-    country: 'France',
-    countryFlag: '🇫🇷',
-  },
-  {
-    id: 'TRD-2024-00244',
-    entity: 'Siemens AB',
-    certType: 'REC',
-    volume: 7800,
-    price: 2.25,
-    tradeDate: '2024-05-11',
-    deliveryPeriod: 'Jan 2024 – Jun 2024',
-    status: 'Paid',
-    country: 'Sweden',
-    countryFlag: '🇸🇪',
-  },
-  {
-    id: 'TRD-2024-00188',
-    entity: 'Siemens Zrt.',
-    certType: 'I-REC',
-    volume: 15000,
-    price: 0.92,
-    tradeDate: '2024-04-19',
-    deliveryPeriod: 'Jan 2024 – Dec 2024',
-    status: 'Contracted',
-    country: 'Turkey',
-    countryFlag: '🇹🇷',
-  },
-  {
-    id: 'TRD-2024-00132',
-    entity: 'Siemens Schweiz AG',
-    certType: 'GoO',
-    volume: 9200,
-    price: 1.72,
-    tradeDate: '2024-03-08',
-    deliveryPeriod: 'Jan 2024 – Dec 2024',
-    status: 'Paid',
-    country: 'Finland',
-    countryFlag: '🇫🇮',
-  },
-  {
-    id: 'TRD-2024-00078',
-    entity: 'Siemens Energy GmbH',
-    certType: 'I-REC',
-    volume: 21000,
-    price: 1.12,
-    tradeDate: '2024-02-14',
-    deliveryPeriod: 'Jan 2024 – Jun 2024',
-    status: 'Payable',
-    country: 'Chile',
-    countryFlag: '🇨🇱',
-  },
-  {
-    id: 'TRD-2026-00045',
-    entity: 'Siemens Mobility GmbH',
-    certType: 'GoO',
-    volume: 16800,
-    price: 1.51,
-    tradeDate: '2026-01-22',
-    deliveryPeriod: 'Jan 2026 – Dec 2026',
-    status: 'Contracted',
-    country: 'Germany',
-    countryFlag: '🇩🇪',
-  },
-  {
-    id: 'TRD-2026-00032',
-    entity: 'Siemens AB',
-    certType: 'I-REC',
-    volume: 6000,
-    price: 1.08,
-    tradeDate: '2026-01-15',
-    deliveryPeriod: 'Jan 2026 – Jun 2026',
-    status: 'Contracted',
-    country: 'Kenya',
-    countryFlag: '🇰🇪',
-  },
-  {
-    id: 'TRD-2026-00018',
+    id: '3LEVDA',
     entity: 'Siemens Zrt.',
     certType: 'GoO',
-    volume: 19000,
-    price: 1.64,
-    tradeDate: '2026-01-08',
-    deliveryPeriod: 'Jan 2026 – Dec 2026',
-    status: 'Payable',
-    country: 'Czech Republic',
-    countryFlag: '🇨🇿',
+    technology: ['T01', 'T02'],
+    volume: 2538,
+    price: 1.75,
+    tradeDate: '2026-02-18',
+    deliveryPeriod: 'Jul 2025 – Jul 2025',
+    status: 'Delivered',
+    country: 'Hungary',
+    countryFlag: '🇭🇺',
   },
   {
-    id: 'TRD-2025-00903',
-    entity: 'Siemens Energy GmbH',
-    certType: 'REC',
-    volume: 13400,
-    price: 2.05,
-    tradeDate: '2025-05-28',
-    deliveryPeriod: 'Jan 2025 – Dec 2025',
-    status: 'Contracted',
-    country: 'United States',
-    countryFlag: '🇺🇸',
-  },
-  {
-    id: 'TRD-2025-00867',
-    entity: 'Siemens Schweiz AG',
-    certType: 'GoO',
-    volume: 7500,
-    price: 1.48,
-    tradeDate: '2025-04-16',
-    deliveryPeriod: 'Jan 2025 – Jun 2025',
-    status: 'Paid',
-    country: 'Switzerland',
-    countryFlag: '🇨🇭',
-  },
-  {
-    id: 'TRD-2025-00822',
-    entity: 'Siemens Mobility GmbH',
-    certType: 'REC',
-    volume: 4500,
-    price: 2.18,
-    tradeDate: '2025-03-02',
-    deliveryPeriod: 'Jan 2025 – Dec 2025',
-    status: 'Payable',
-    country: 'Poland',
-    countryFlag: '🇵🇱',
-  },
-  {
-    id: 'TRD-2024-00556',
+    id: '6I858M',
     entity: 'Siemens Zrt.',
     certType: 'GoO',
-    volume: 26000,
-    price: 1.39,
-    tradeDate: '2024-10-30',
-    deliveryPeriod: 'Jul 2024 – Dec 2024',
-    status: 'Paid',
-    country: 'Slovakia',
-    countryFlag: '🇸🇰',
+    technology: ['T01', 'T02'],
+    volume: 1801,
+    price: 1.25,
+    tradeDate: '2026-02-18',
+    deliveryPeriod: 'Jun 2025 – Jun 2025',
+    status: 'Delivered',
+    country: 'Hungary',
+    countryFlag: '🇭🇺',
   },
   {
-    id: 'TRD-2024-00489',
-    entity: 'Siemens Energy GmbH',
-    certType: 'I-REC',
-    volume: 17500,
-    price: 0.88,
-    tradeDate: '2024-09-05',
-    deliveryPeriod: 'Jan 2024 – Dec 2024',
-    status: 'Contracted',
-    country: 'South Africa',
-    countryFlag: '🇿🇦',
-  },
-  {
-    id: 'TRD-2025-00711',
-    entity: 'Siemens AB',
+    id: 'MCJUMO',
+    entity: 'Siemens Zrt.',
     certType: 'GoO',
-    volume: 11200,
-    price: 1.66,
-    tradeDate: '2025-06-10',
-    deliveryPeriod: 'Jul 2025 – Dec 2025',
-    status: 'Contracted',
-    country: 'Denmark',
-    countryFlag: '🇩🇰',
+    technology: ['T01', 'T02'],
+    volume: 187,
+    price: 1.25,
+    tradeDate: '2026-02-18',
+    deliveryPeriod: 'Jul 2025 – Jul 2025',
+    status: 'Delivered',
+    country: 'Hungary',
+    countryFlag: '🇭🇺',
   },
-  {
-    id: 'TRD-2026-00061',
-    entity: 'Siemens Schweiz AG',
-    certType: 'REC',
-    volume: 8900,
-    price: 2.30,
-    tradeDate: '2026-02-14',
-    deliveryPeriod: 'Jan 2026 – Dec 2026',
-    status: 'Contracted',
-    country: 'Netherlands',
-    countryFlag: '🇳🇱',
-  },
-
-  // ── Additional trades ────────────────────────────────────────────────────────
-
-  // Siemens Mobility GmbH
-  { id: 'TRD-2024-00055', entity: 'Siemens Mobility GmbH', certType: 'GoO',   volume: 20000, price: 1.33, tradeDate: '2024-01-18', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Germany',        countryFlag: '🇩🇪' },
-  { id: 'TRD-2024-00102', entity: 'Siemens Mobility GmbH', certType: 'I-REC', volume: 6200,  price: 0.91, tradeDate: '2024-02-29', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'India',          countryFlag: '🇮🇳' },
-  { id: 'TRD-2024-00159', entity: 'Siemens Mobility GmbH', certType: 'REC',   volume: 4100,  price: 2.05, tradeDate: '2024-03-22', deliveryPeriod: 'Jan 2024 – Dec 2024',  status: 'Paid',       country: 'Poland',         countryFlag: '🇵🇱' },
-  { id: 'TRD-2024-00621', entity: 'Siemens Mobility GmbH', certType: 'GoO',   volume: 15800, price: 1.49, tradeDate: '2024-11-05', deliveryPeriod: 'Jul 2024 – Dec 2024',  status: 'Paid',       country: 'France',         countryFlag: '🇫🇷' },
-  { id: 'TRD-2025-00110', entity: 'Siemens Mobility GmbH', certType: 'GoO',   volume: 11000, price: 1.61, tradeDate: '2025-04-08', deliveryPeriod: 'Jan 2025 – Jun 2025',  status: 'Paid',       country: 'Germany',        countryFlag: '🇩🇪' },
-  { id: 'TRD-2025-00198', entity: 'Siemens Mobility GmbH', certType: 'I-REC', volume: 7500,  price: 1.02, tradeDate: '2025-05-19', deliveryPeriod: 'Jan 2025 – Dec 2025',  status: 'Payable',    country: 'Mexico',         countryFlag: '🇲🇽' },
-  { id: 'TRD-2025-00455', entity: 'Siemens Mobility GmbH', certType: 'GoO',   volume: 9300,  price: 1.55, tradeDate: '2025-08-30', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'Belgium',        countryFlag: '🇧🇪' },
-  { id: 'TRD-2025-00544', entity: 'Siemens Mobility GmbH', certType: 'REC',   volume: 3800,  price: 2.22, tradeDate: '2025-09-14', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'Canada',         countryFlag: '🇨🇦' },
-  { id: 'TRD-2026-00079', entity: 'Siemens Mobility GmbH', certType: 'GoO',   volume: 14500, price: 1.68, tradeDate: '2026-03-02', deliveryPeriod: 'Jan 2026 – Dec 2026',  status: 'Contracted', country: 'Germany',        countryFlag: '🇩🇪' },
-  { id: 'TRD-2026-00112', entity: 'Siemens Mobility GmbH', certType: 'I-REC', volume: 5500,  price: 1.15, tradeDate: '2026-04-11', deliveryPeriod: 'Jan 2026 – Jun 2026',  status: 'Contracted', country: 'Vietnam',        countryFlag: '🇻🇳' },
-
-  // Siemens AB
-  { id: 'TRD-2024-00071', entity: 'Siemens AB', certType: 'GoO',   volume: 9500,  price: 1.71, tradeDate: '2024-01-30', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Sweden',         countryFlag: '🇸🇪' },
-  { id: 'TRD-2024-00140', entity: 'Siemens AB', certType: 'I-REC', volume: 5100,  price: 0.88, tradeDate: '2024-03-07', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Kenya',          countryFlag: '🇰🇪' },
-  { id: 'TRD-2024-00335', entity: 'Siemens AB', certType: 'GoO',   volume: 11300, price: 1.58, tradeDate: '2024-06-21', deliveryPeriod: 'Jan 2024 – Dec 2024',  status: 'Paid',       country: 'Finland',        countryFlag: '🇫🇮' },
-  { id: 'TRD-2024-00455', entity: 'Siemens AB', certType: 'REC',   volume: 4400,  price: 2.18, tradeDate: '2024-08-09', deliveryPeriod: 'Jul 2024 – Dec 2024',  status: 'Payable',    country: 'Sweden',         countryFlag: '🇸🇪' },
-  { id: 'TRD-2024-00572', entity: 'Siemens AB', certType: 'I-REC', volume: 6700,  price: 0.97, tradeDate: '2024-10-17', deliveryPeriod: 'Jul 2024 – Dec 2024',  status: 'Paid',       country: 'Tanzania',       countryFlag: '🇹🇿' },
-  { id: 'TRD-2025-00155', entity: 'Siemens AB', certType: 'GoO',   volume: 8800,  price: 1.65, tradeDate: '2025-03-28', deliveryPeriod: 'Jan 2025 – Jun 2025',  status: 'Paid',       country: 'Norway',         countryFlag: '🇳🇴' },
-  { id: 'TRD-2025-00309', entity: 'Siemens AB', certType: 'REC',   volume: 3200,  price: 2.31, tradeDate: '2025-06-04', deliveryPeriod: 'Jan 2025 – Dec 2025',  status: 'Payable',    country: 'United States',  countryFlag: '🇺🇸' },
-  { id: 'TRD-2025-00502', entity: 'Siemens AB', certType: 'GoO',   volume: 10500, price: 1.72, tradeDate: '2025-09-22', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'Denmark',        countryFlag: '🇩🇰' },
-  { id: 'TRD-2026-00038', entity: 'Siemens AB', certType: 'I-REC', volume: 7200,  price: 1.09, tradeDate: '2026-01-29', deliveryPeriod: 'Jan 2026 – Jun 2026',  status: 'Contracted', country: 'Rwanda',         countryFlag: '🇷🇼' },
-  { id: 'TRD-2026-00095', entity: 'Siemens AB', certType: 'GoO',   volume: 12100, price: 1.79, tradeDate: '2026-04-03', deliveryPeriod: 'Jan 2026 – Dec 2026',  status: 'Contracted', country: 'Sweden',         countryFlag: '🇸🇪' },
-
-  // Siemens Zrt.
-  { id: 'TRD-2024-00088', entity: 'Siemens Zrt.', certType: 'GoO',   volume: 18000, price: 1.41, tradeDate: '2024-02-12', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Hungary',        countryFlag: '🇭🇺' },
-  { id: 'TRD-2024-00215', entity: 'Siemens Zrt.', certType: 'REC',   volume: 5500,  price: 1.99, tradeDate: '2024-04-25', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Romania',        countryFlag: '🇷🇴' },
-  { id: 'TRD-2024-00393', entity: 'Siemens Zrt.', certType: 'I-REC', volume: 9200,  price: 0.94, tradeDate: '2024-07-03', deliveryPeriod: 'Jul 2024 – Dec 2024',  status: 'Paid',       country: 'Egypt',          countryFlag: '🇪🇬' },
-  { id: 'TRD-2024-00503', entity: 'Siemens Zrt.', certType: 'GoO',   volume: 21500, price: 1.36, tradeDate: '2024-09-16', deliveryPeriod: 'Jul 2024 – Dec 2024',  status: 'Payable',    country: 'Czech Republic',  countryFlag: '🇨🇿' },
-  { id: 'TRD-2025-00074', entity: 'Siemens Zrt.', certType: 'GoO',   volume: 16200, price: 1.53, tradeDate: '2025-02-07', deliveryPeriod: 'Jan 2025 – Jun 2025',  status: 'Paid',       country: 'Hungary',        countryFlag: '🇭🇺' },
-  { id: 'TRD-2025-00233', entity: 'Siemens Zrt.', certType: 'I-REC', volume: 8400,  price: 1.01, tradeDate: '2025-05-31', deliveryPeriod: 'Jan 2025 – Dec 2025',  status: 'Payable',    country: 'Morocco',        countryFlag: '🇲🇦' },
-  { id: 'TRD-2025-00388', entity: 'Siemens Zrt.', certType: 'REC',   volume: 4900,  price: 2.09, tradeDate: '2025-07-21', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'Slovakia',       countryFlag: '🇸🇰' },
-  { id: 'TRD-2025-00620', entity: 'Siemens Zrt.', certType: 'GoO',   volume: 24000, price: 1.47, tradeDate: '2025-11-08', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'Hungary',        countryFlag: '🇭🇺' },
-  { id: 'TRD-2026-00027', entity: 'Siemens Zrt.', certType: 'GoO',   volume: 17800, price: 1.60, tradeDate: '2026-01-14', deliveryPeriod: 'Jan 2026 – Jun 2026',  status: 'Contracted', country: 'Poland',         countryFlag: '🇵🇱' },
-  { id: 'TRD-2026-00083', entity: 'Siemens Zrt.', certType: 'I-REC', volume: 6800,  price: 1.11, tradeDate: '2026-03-25', deliveryPeriod: 'Jan 2026 – Dec 2026',  status: 'Contracted', country: 'Jordan',         countryFlag: '🇯🇴' },
-
-  // Siemens Schweiz AG
-  { id: 'TRD-2024-00063', entity: 'Siemens Schweiz AG', certType: 'GoO',   volume: 7800,  price: 1.76, tradeDate: '2024-01-24', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Switzerland',    countryFlag: '🇨🇭' },
-  { id: 'TRD-2024-00176', entity: 'Siemens Schweiz AG', certType: 'I-REC', volume: 4300,  price: 1.08, tradeDate: '2024-04-02', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Colombia',       countryFlag: '🇨🇴' },
-  { id: 'TRD-2024-00278', entity: 'Siemens Schweiz AG', certType: 'REC',   volume: 3600,  price: 2.14, tradeDate: '2024-05-28', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Netherlands',    countryFlag: '🇳🇱' },
-  { id: 'TRD-2024-00531', entity: 'Siemens Schweiz AG', certType: 'GoO',   volume: 10200, price: 1.69, tradeDate: '2024-10-11', deliveryPeriod: 'Jul 2024 – Dec 2024',  status: 'Paid',       country: 'Austria',        countryFlag: '🇦🇹' },
-  { id: 'TRD-2025-00087', entity: 'Siemens Schweiz AG', certType: 'GoO',   volume: 8100,  price: 1.74, tradeDate: '2025-02-13', deliveryPeriod: 'Jan 2025 – Jun 2025',  status: 'Paid',       country: 'Switzerland',    countryFlag: '🇨🇭' },
-  { id: 'TRD-2025-00274', entity: 'Siemens Schweiz AG', certType: 'I-REC', volume: 5800,  price: 1.06, tradeDate: '2025-06-17', deliveryPeriod: 'Jan 2025 – Dec 2025',  status: 'Payable',    country: 'Peru',           countryFlag: '🇵🇪' },
-  { id: 'TRD-2025-00413', entity: 'Siemens Schweiz AG', certType: 'GoO',   volume: 6900,  price: 1.81, tradeDate: '2025-08-05', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'Germany',        countryFlag: '🇩🇪' },
-  { id: 'TRD-2025-00558', entity: 'Siemens Schweiz AG', certType: 'REC',   volume: 4100,  price: 2.35, tradeDate: '2025-10-20', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'United States',  countryFlag: '🇺🇸' },
-  { id: 'TRD-2026-00044', entity: 'Siemens Schweiz AG', certType: 'GoO',   volume: 9400,  price: 1.85, tradeDate: '2026-02-01', deliveryPeriod: 'Jan 2026 – Jun 2026',  status: 'Contracted', country: 'Switzerland',    countryFlag: '🇨🇭' },
-  { id: 'TRD-2026-00108', entity: 'Siemens Schweiz AG', certType: 'I-REC', volume: 4700,  price: 1.19, tradeDate: '2026-04-22', deliveryPeriod: 'Jan 2026 – Dec 2026',  status: 'Contracted', country: 'Ecuador',        countryFlag: '🇪🇨' },
-
-  // Siemens Energy GmbH
-  { id: 'TRD-2024-00039', entity: 'Siemens Energy GmbH', certType: 'GoO',   volume: 32000, price: 1.37, tradeDate: '2024-01-08', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Germany',        countryFlag: '🇩🇪' },
-  { id: 'TRD-2024-00117', entity: 'Siemens Energy GmbH', certType: 'I-REC', volume: 14000, price: 0.96, tradeDate: '2024-03-14', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'Brazil',         countryFlag: '🇧🇷' },
-  { id: 'TRD-2024-00253', entity: 'Siemens Energy GmbH', certType: 'REC',   volume: 9500,  price: 2.01, tradeDate: '2024-05-06', deliveryPeriod: 'Jan 2024 – Jun 2024',  status: 'Paid',       country: 'United States',  countryFlag: '🇺🇸' },
-  { id: 'TRD-2024-00428', entity: 'Siemens Energy GmbH', certType: 'GoO',   volume: 26500, price: 1.43, tradeDate: '2024-08-01', deliveryPeriod: 'Jul 2024 – Dec 2024',  status: 'Paid',       country: 'Spain',          countryFlag: '🇪🇸' },
-  { id: 'TRD-2024-00601', entity: 'Siemens Energy GmbH', certType: 'I-REC', volume: 19000, price: 0.89, tradeDate: '2024-11-22', deliveryPeriod: 'Jul 2024 – Dec 2024',  status: 'Payable',    country: 'Argentina',      countryFlag: '🇦🇷' },
-  { id: 'TRD-2025-00062', entity: 'Siemens Energy GmbH', certType: 'GoO',   volume: 29500, price: 1.44, tradeDate: '2025-01-28', deliveryPeriod: 'Jan 2025 – Jun 2025',  status: 'Paid',       country: 'France',         countryFlag: '🇫🇷' },
-  { id: 'TRD-2025-00185', entity: 'Siemens Energy GmbH', certType: 'REC',   volume: 11500, price: 2.08, tradeDate: '2025-04-24', deliveryPeriod: 'Jan 2025 – Jun 2025',  status: 'Paid',       country: 'Australia',      countryFlag: '🇦🇺' },
-  { id: 'TRD-2025-00342', entity: 'Siemens Energy GmbH', certType: 'GoO',   volume: 22000, price: 1.51, tradeDate: '2025-07-10', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Payable',    country: 'Italy',          countryFlag: '🇮🇹' },
-  { id: 'TRD-2025-00487', entity: 'Siemens Energy GmbH', certType: 'I-REC', volume: 16500, price: 1.04, tradeDate: '2025-09-03', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'South Africa',   countryFlag: '🇿🇦' },
-  { id: 'TRD-2025-00635', entity: 'Siemens Energy GmbH', certType: 'GoO',   volume: 31000, price: 1.58, tradeDate: '2025-11-29', deliveryPeriod: 'Jul 2025 – Dec 2025',  status: 'Contracted', country: 'Germany',        countryFlag: '🇩🇪' },
-  { id: 'TRD-2026-00013', entity: 'Siemens Energy GmbH', certType: 'GoO',   volume: 27000, price: 1.62, tradeDate: '2026-01-06', deliveryPeriod: 'Jan 2026 – Jun 2026',  status: 'Contracted', country: 'Portugal',       countryFlag: '🇵🇹' },
-  { id: 'TRD-2026-00055', entity: 'Siemens Energy GmbH', certType: 'I-REC', volume: 13500, price: 1.13, tradeDate: '2026-02-26', deliveryPeriod: 'Jan 2026 – Dec 2026',  status: 'Contracted', country: 'Nigeria',        countryFlag: '🇳🇬' },
-  { id: 'TRD-2026-00098', entity: 'Siemens Energy GmbH', certType: 'REC',   volume: 8200,  price: 2.41, tradeDate: '2026-04-15', deliveryPeriod: 'Jan 2026 – Dec 2026',  status: 'Contracted', country: 'United States',  countryFlag: '🇺🇸' },
 ];

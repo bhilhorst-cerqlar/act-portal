@@ -1,10 +1,10 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { Trade, CertType, TradeStatus } from '../../types';
-import { formatNumber, formatPrice, formatDate } from '../../utils/format';
+import { formatNumber, formatPrice, formatDate, TECHNOLOGY_LABELS } from '../../utils/format';
 import { trades, entities } from '../../data/mockData';
 
-type SortKey = keyof Trade | 'totalValue';
+type SortKey = Exclude<keyof Trade, 'technology'> | 'totalValue';
 type SortDir = 'asc' | 'desc';
 
 const certBadge: Record<CertType, { bg: string; color: string }> = {
@@ -14,9 +14,8 @@ const certBadge: Record<CertType, { bg: string; color: string }> = {
 };
 
 const statusBadge: Record<TradeStatus, { bg: string; color: string }> = {
-  Paid: { bg: '#eef9f5', color: '#468d76' },
-  Payable: { bg: '#fdeef0', color: '#e05a6b' },
-  Contracted: { bg: '#eef3fd', color: '#1571f1' },
+  'Delivered':     { bg: '#eef9f5', color: '#468d76' },
+  'Not Delivered': { bg: '#fdf8ee', color: '#c9a227' },
 };
 
 const Badge = ({ label, style }: { label: string; style: { bg: string; color: string } }) => (
@@ -169,9 +168,9 @@ const TradesTable = () => {
           {statusFilter !== 'All' && (
             <span style={{
               fontSize: 13, padding: '3px 10px', borderRadius: 6, fontWeight: 500,
-              ...(statusFilter === 'Paid'    ? { background: '#eef9f5', color: '#468d76' }
-                : statusFilter === 'Payable' ? { background: '#fdeef0', color: '#e05a6b' }
-                :                              { background: '#eef3fd', color: '#1571f1' }),
+              ...(statusFilter === 'Delivered'
+                ? { background: '#eef9f5', color: '#468d76' }
+                : { background: '#fdf8ee', color: '#c9a227' }),
             }}>
               {statusFilter}
             </span>
@@ -256,9 +255,8 @@ const TradesTable = () => {
           onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
         >
           <option value="All">All Statuses</option>
-          <option value="Paid">Paid</option>
-          <option value="Payable">Payable</option>
-          <option value="Contracted">Contracted</option>
+          <option value="Delivered">Delivered</option>
+          <option value="Not Delivered">Not Delivered</option>
         </select>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -313,12 +311,13 @@ const TradesTable = () => {
                     <SortIcon active={sortKey === col.key} dir={sortDir} />
                   </th>
                 ))}
+                <th style={{ ...thStyle('id'), cursor: 'default' }}>Technology</th>
               </tr>
             </thead>
             <tbody>
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '48px 24px', color: '#919191' }}>
+                  <td colSpan={11} style={{ textAlign: 'center', padding: '48px 24px', color: '#919191' }}>
                     <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
                     <div style={{ fontWeight: 500, color: '#50616a', fontSize: 14 }}>No trades found</div>
                     <div style={{ fontSize: 13, marginTop: 4 }}>Try adjusting your search or filters</div>
@@ -364,6 +363,29 @@ const TradesTable = () => {
                     </td>
                     <td style={{ padding: '11px 14px', color: '#50616a', whiteSpace: 'nowrap' }}>
                       {trade.countryFlag} {trade.country}
+                    </td>
+                    <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {trade.technology.map((code) => (
+                          <span
+                            key={code}
+                            title={TECHNOLOGY_LABELS[code] ?? code}
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 7px',
+                              borderRadius: 5,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              background: '#f0f4ff',
+                              color: '#3a5abf',
+                              cursor: 'default',
+                              letterSpacing: '0.02em',
+                            }}
+                          >
+                            {code}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                   </tr>
                 ))
